@@ -10,10 +10,29 @@
             --accent: #2980b9; --light: #f4f7f6; --shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #1a1a1a; font-size: 18px; background-color: var(--light); }
-        .container { max-width: 1100px; margin: 30px auto; background: white; padding: 30px; border-radius: 25px; box-shadow: var(--shadow); min-height: 80vh; }
+        .container { max-width: 1100px; margin: 30px auto; background: white; padding: 30px; border-radius: 25px; box-shadow: var(--shadow); min-height: 80vh; position: relative; }
         
         header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid var(--primary); padding-bottom: 15px; }
         header h1 { color: var(--primary); margin: 0; font-size: 28px; }
+
+        /* Style cho đồng hồ đếm ngược */
+        #timer-box {
+            position: sticky;
+            top: 10px;
+            z-index: 1000;
+            background: #fff;
+            border: 3px solid var(--danger);
+            color: var(--danger);
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            width: fit-content;
+            margin: 0 auto 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: none;
+        }
 
         nav { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
         button { padding: 12px 20px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.1s; box-shadow: 0 5px #7f8c8d; position: relative; outline: none; }
@@ -25,7 +44,6 @@
         .btn-green { background: var(--secondary); color: white; box-shadow: 0 5px #196f3d; }
         .btn-purple { background: #8e44ad; color: white; box-shadow: 0 5px #6c3483; }
 
-        /* Thanh chọn bộ đề - Cập nhật luôn hiển thị */
         #selector-bar { background:#eceff1; padding:15px; border-radius:15px; margin-bottom:20px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; border:1px solid #cfd8dc; }
         #selector-bar button { padding: 8px 15px; font-size: 14px; box-shadow: 0 3px #95a5a6; }
         .active-set { background: #f39c12 !important; color: white !important; box-shadow: 0 3px #d35400 !important; transform: scale(1.05); }
@@ -66,6 +84,8 @@
         <button class="btn-purple" onclick="renderHistory()">📜 LỊCH SỬ</button>
     </nav>
 
+    <div id="timer-box">⏱️ Thời gian còn lại: <span id="timer-clock">00:00</span></div>
+
     <div id="selector-bar" class="hidden"></div>
 
     <div id="top-result" class="result-header">
@@ -85,7 +105,8 @@ let App = {
     currentQs: [],
     history: JSON.parse(localStorage.getItem('vhpt_v4_history')) || [],
     currentType: '',
-    currentSetIdx: null
+    currentSetIdx: null,
+    timerInterval: null // Quản lý đồng hồ
 };
 
 window.onload = async () => { await syncData(); };
@@ -111,6 +132,27 @@ async function syncData() {
     }
 }
 
+// --- LOGIC ĐỒNG HỒ ---
+function startTimer(minutes) {
+    clearInterval(App.timerInterval);
+    let seconds = minutes * 60;
+    const display = document.getElementById('timer-clock');
+    const box = document.getElementById('timer-box');
+    box.style.display = 'block';
+
+    App.timerInterval = setInterval(() => {
+        let min = Math.floor(seconds / 60);
+        let sec = seconds % 60;
+        display.innerText = `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+        
+        if (--seconds < 0) {
+            clearInterval(App.timerInterval);
+            alert("Hết thời gian! Hệ thống sẽ tự động nộp bài.");
+            submitQuiz();
+        }
+    }, 1000);
+}
+
 // --- LOGIC BỘ ĐỀ ---
 function renderSets() {
     const bar = document.getElementById('selector-bar');
@@ -124,7 +166,6 @@ function renderSets() {
     }
     bar.innerHTML = html;
     
-    // Nếu đang làm dở bộ nào thì highlight bộ đó
     if(App.currentSetIdx) document.getElementById(`btn-set-${App.currentSetIdx}`).classList.add('active-set');
 }
 
@@ -132,22 +173,23 @@ function startSet(setIdx) {
     App.currentSetIdx = setIdx;
     App.currentType = `Bộ đề ${setIdx}`;
     
-    // Highlight nút đang chọn
     document.querySelectorAll('#selector-bar button').forEach(b => b.classList.remove('active-set'));
     document.getElementById(`btn-set-${setIdx}`).classList.add('active-set');
 
     const start = (setIdx - 1) * 10;
     App.currentQs = App.db.slice(start, start + 10);
     renderQuiz();
+    startTimer(App.currentQs.length); // 1 phút mỗi câu
 }
 
 // --- LOGIC NGẪU NHIÊN ---
 function startRandom(count) {
-    App.currentSetIdx = null; // Reset bộ đề khi chọn ngẫu nhiên
+    App.currentSetIdx = null;
     document.getElementById('selector-bar').classList.add('hidden');
     App.currentType = `Ngẫu nhiên ${count} câu`;
     App.currentQs = [...App.db].sort(() => 0.5 - Math.random()).slice(0, count);
     renderQuiz();
+    startTimer(count); // 1 phút mỗi câu
 }
 
 function renderQuiz() {
@@ -167,6 +209,9 @@ function renderQuiz() {
 }
 
 function submitQuiz() {
+    clearInterval(App.timerInterval); // Dừng đồng hồ khi nộp bài
+    document.getElementById('timer-box').style.display = 'none';
+
     let score = 0;
     App.currentQs.forEach((q, i) => {
         const selected = document.querySelector(`input[name="q${i}"]:checked`);
@@ -188,6 +233,8 @@ function submitQuiz() {
 }
 
 function renderHistory() {
+    clearInterval(App.timerInterval);
+    document.getElementById('timer-box').style.display = 'none';
     document.getElementById('selector-bar').classList.add('hidden');
     document.getElementById('submit-btn').classList.add('hidden');
     const area = document.getElementById('app-area');
@@ -202,6 +249,8 @@ function renderHistory() {
 }
 
 function renderViewAll() {
+    clearInterval(App.timerInterval);
+    document.getElementById('timer-box').style.display = 'none';
     document.getElementById('selector-bar').classList.add('hidden');
     document.getElementById('submit-btn').classList.add('hidden');
     document.getElementById('app-area').innerHTML = `<h2 style="text-align:center;">DANH SÁCH ĐÁP ÁN</h2>` + 
@@ -209,10 +258,11 @@ function renderViewAll() {
 }
 
 function clearQuizArea() {
+    clearInterval(App.timerInterval);
+    document.getElementById('timer-box').style.display = 'none';
     document.getElementById('top-result').style.display = 'none';
     document.getElementById('app-area').innerHTML = '';
 }
 </script>
 </body>
 </html>
-
