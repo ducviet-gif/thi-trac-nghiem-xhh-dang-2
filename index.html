@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-     <title>K76.A03 - Hệ Thống Ôn Thi XHH - Dạng 2 Chọn Đúng/Sai</title>
+     <title>K76.A03 - Hệ Thống Ôn Thi Môn XHH - Dạng 2 Chọn Đúng/Sai</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root { 
@@ -15,7 +15,6 @@
         header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid var(--primary); padding-bottom: 15px; }
         header h1 { color: var(--primary); margin: 0; font-size: 28px; }
 
-        /* Style cho đồng hồ đếm ngược */
         #timer-box {
             position: sticky;
             top: 10px;
@@ -63,6 +62,9 @@
         th, td { padding: 15px; text-align: left; border: 1px solid #ddd; }
         th { background: #f8f9fa; }
 
+        .filter-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; padding: 10px; background: #f0f4f8; border-radius: 15px; }
+        .filter-controls button { font-size: 14px; padding: 8px 15px; }
+
         .hidden { display: none !important; }
     </style>
 </head>
@@ -106,7 +108,7 @@ let App = {
     history: JSON.parse(localStorage.getItem('vhpt_v4_history')) || [],
     currentType: '',
     currentSetIdx: null,
-    timerInterval: null // Quản lý đồng hồ
+    timerInterval: null
 };
 
 window.onload = async () => { await syncData(); };
@@ -132,7 +134,6 @@ async function syncData() {
     }
 }
 
-// --- LOGIC ĐỒNG HỒ ---
 function startTimer(minutes) {
     clearInterval(App.timerInterval);
     let seconds = minutes * 60;
@@ -153,7 +154,6 @@ function startTimer(minutes) {
     }, 1000);
 }
 
-// --- LOGIC BỘ ĐỀ ---
 function renderSets() {
     const bar = document.getElementById('selector-bar');
     bar.classList.remove('hidden');
@@ -172,24 +172,21 @@ function renderSets() {
 function startSet(setIdx) {
     App.currentSetIdx = setIdx;
     App.currentType = `Bộ đề ${setIdx}`;
-    
     document.querySelectorAll('#selector-bar button').forEach(b => b.classList.remove('active-set'));
     document.getElementById(`btn-set-${setIdx}`).classList.add('active-set');
-
     const start = (setIdx - 1) * 10;
     App.currentQs = App.db.slice(start, start + 10);
     renderQuiz();
-    startTimer(App.currentQs.length); // 1 phút mỗi câu
+    startTimer(App.currentQs.length);
 }
 
-// --- LOGIC NGẪU NHIÊN ---
 function startRandom(count) {
     App.currentSetIdx = null;
     document.getElementById('selector-bar').classList.add('hidden');
     App.currentType = `Ngẫu nhiên ${count} câu`;
     App.currentQs = [...App.db].sort(() => 0.5 - Math.random()).slice(0, count);
     renderQuiz();
-    startTimer(count); // 1 phút mỗi câu
+    startTimer(count);
 }
 
 function renderQuiz() {
@@ -209,9 +206,8 @@ function renderQuiz() {
 }
 
 function submitQuiz() {
-    clearInterval(App.timerInterval); // Dừng đồng hồ khi nộp bài
+    clearInterval(App.timerInterval);
     document.getElementById('timer-box').style.display = 'none';
-
     let score = 0;
     App.currentQs.forEach((q, i) => {
         const selected = document.querySelector(`input[name="q${i}"]:checked`);
@@ -222,10 +218,8 @@ function submitQuiz() {
             wrap.innerHTML += `<div style="color:var(--danger); font-weight:bold; margin-top:10px;">👉 ĐÁP ÁN ĐÚNG: ${q.ans.toUpperCase()}</div>`;
         }
     });
-
     App.history.push({ date: new Date().toLocaleString(), type: App.currentType, score: `${score}/${App.currentQs.length}` });
     localStorage.setItem('vhpt_v4_history', JSON.stringify(App.history));
-
     document.getElementById('score-text').innerHTML = `<h2>KẾT QUẢ: ${score} / ${App.currentQs.length}</h2>`;
     document.getElementById('top-result').style.display = 'block';
     document.getElementById('submit-btn').classList.add('hidden');
@@ -239,7 +233,6 @@ function renderHistory() {
     document.getElementById('submit-btn').classList.add('hidden');
     const area = document.getElementById('app-area');
     if (App.history.length === 0) { area.innerHTML = "<p style='text-align:center;'>Chưa có lịch sử thi.</p>"; return; }
-
     let html = `<h3>📜 LỊCH SỬ</h3><table><tr><th>Thời gian</th><th>Loại bài</th><th>Kết quả</th></tr>`;
     App.history.slice().reverse().forEach(h => {
         html += `<tr><td>${h.date}</td><td>${h.type}</td><td style="color:var(--secondary); font-weight:bold;">${h.score}</td></tr>`;
@@ -248,13 +241,36 @@ function renderHistory() {
     area.innerHTML = html;
 }
 
-function renderViewAll() {
+// Cải tiến chức năng Xem tất cả đáp án với tính năng lọc
+function renderViewAll(filter = 'all') {
     clearInterval(App.timerInterval);
     document.getElementById('timer-box').style.display = 'none';
     document.getElementById('selector-bar').classList.add('hidden');
     document.getElementById('submit-btn').classList.add('hidden');
-    document.getElementById('app-area').innerHTML = `<h2 style="text-align:center;">DANH SÁCH ĐÁP ÁN</h2>` + 
-    App.db.map((q, i) => `<div class="q-block"><p>${i+1}. ${q.content}</p><b style="color:${q.ans==='Đúng'?'green':'red'}">=> ĐÁP ÁN: ${q.ans.toUpperCase()}</b></div>`).join('');
+    
+    let filteredDb = App.db;
+    if (filter === 'true') filteredDb = App.db.filter(q => q.ans === 'Đúng');
+    if (filter === 'false') filteredDb = App.db.filter(q => q.ans === 'Sai');
+
+    const area = document.getElementById('app-area');
+    let headerHtml = `
+        <div style="text-align:center;">
+            <h2>DANH SÁCH ĐÁP ÁN (${filteredDb.length} câu)</h2>
+            <div class="filter-controls">
+                <button class="${filter === 'all' ? 'btn-main' : 'btn-sub'}" onclick="renderViewAll('all')">Tất cả</button>
+                <button class="${filter === 'true' ? 'btn-green' : 'btn-sub'}" onclick="renderViewAll('true')">Chỉ câu ĐÚNG</button>
+                <button class="${filter === 'false' ? 'btn-orange' : 'btn-sub'}" onclick="renderViewAll('false')">Chỉ câu SAI</button>
+            </div>
+        </div>
+    `;
+
+    area.innerHTML = headerHtml + filteredDb.map((q, i) => `
+        <div class="q-block">
+            <p>${i+1}. ${q.content}</p>
+            <b style="color:${q.ans==='Đúng'?'#27ae60':'#e74c3c'}">=> ĐÁP ÁN: ${q.ans.toUpperCase()}</b>
+        </div>
+    `).join('');
+    window.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function clearQuizArea() {
