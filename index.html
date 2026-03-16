@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+     <title>K76.A03 - Hệ Thống Ôn Thi VHPT - Dạng 2 Chọn Đúng/Sai</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { 
+            --primary: #2c3e50; --secondary: #27ae60; --danger: #e74c3c; 
+            --accent: #2980b9; --light: #f4f7f6; --shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; color: #1a1a1a; font-size: 18px; background-color: var(--light); }
+        .container { max-width: 1100px; margin: 30px auto; background: white; padding: 30px; border-radius: 25px; box-shadow: var(--shadow); min-height: 80vh; }
+        
+        header { text-align: center; margin-bottom: 25px; border-bottom: 3px solid var(--primary); padding-bottom: 15px; }
+        header h1 { color: var(--primary); margin: 0; font-size: 28px; }
+
+        nav { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 12px 20px; border: none; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 16px; transition: 0.1s; box-shadow: 0 5px #7f8c8d; position: relative; outline: none; }
+        button:active { box-shadow: 0 0 #7f8c8d; transform: translateY(5px); }
+        
+        .btn-main { background: var(--primary); color: white; box-shadow: 0 5px #1a252f; }
+        .btn-orange { background: #d35400; color: white; box-shadow: 0 5px #a04000; }
+        .btn-sub { background: var(--accent); color: white; box-shadow: 0 5px #1a5276; }
+        .btn-green { background: var(--secondary); color: white; box-shadow: 0 5px #196f3d; }
+        .btn-purple { background: #8e44ad; color: white; box-shadow: 0 5px #6c3483; }
+
+        /* Thanh chọn bộ đề - Cập nhật luôn hiển thị */
+        #selector-bar { background:#eceff1; padding:15px; border-radius:15px; margin-bottom:20px; display:flex; gap:8px; flex-wrap:wrap; justify-content:center; border:1px solid #cfd8dc; }
+        #selector-bar button { padding: 8px 15px; font-size: 14px; box-shadow: 0 3px #95a5a6; }
+        .active-set { background: #f39c12 !important; color: white !important; box-shadow: 0 3px #d35400 !important; transform: scale(1.05); }
+
+        .q-block { border: 1px solid #cfd8dc; padding: 25px; margin: 15px 0; border-radius: 15px; background: #fff; }
+        .q-block p { font-weight: bold; font-size: 21px; color: #0d47a1; margin-top: 0; line-height: 1.5; }
+        
+        .tf-group { display: flex; gap: 60px; margin-top: 15px; }
+        .option-item { display: flex; align-items: center; cursor: pointer; font-size: 20px; font-weight: bold; padding: 5px 10px; border-radius: 8px; transition: 0.2s; }
+        .option-item:hover { background: #e3f2fd; }
+        input[type="radio"] { width: 28px; height: 28px; margin-right: 12px; cursor: pointer; }
+        
+        .wrong-ans { border-left: 10px solid var(--danger) !important; background: #ffebee !important; }
+        .result-header { background: #fff9c4; border: 4px solid #fbc02d; padding: 25px; margin-bottom: 25px; border-radius: 15px; text-align: center; display: none; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; }
+        th, td { padding: 15px; text-align: left; border: 1px solid #ddd; }
+        th { background: #f8f9fa; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Hệ thống ôn tập thi trắc nghiệm</h1>
+        <p style="color:var(--accent); font-weight:bold;">Môn: Văn hoá Phát triển - Lớp K76.A03 - Dạng 2 Chọn đáp án Đúng/Sai</p>
+    </header>
+
+    <div id="sync-info" style="text-align:center; color: #e67e22; font-weight:bold; margin-bottom:10px;">⏳ Đang kết nối dữ liệu...</div>
+
+    <nav id="main-nav" class="hidden">
+        <button class="btn-main" onclick="startRandom(10)">🎲 NGẪU NHIÊN 10 CÂU</button>
+        <button class="btn-orange" onclick="startRandom(20)">🔥 NGẪU NHIÊN 20 CÂU</button>
+        <button class="btn-sub" onclick="renderSets()">🔢 THI THEO BỘ ĐỀ</button>
+        <button class="btn-green" onclick="renderViewAll()">📚 TẤT CẢ ĐÁP ÁN</button>
+        <button class="btn-purple" onclick="renderHistory()">📜 LỊCH SỬ</button>
+    </nav>
+
+    <div id="selector-bar" class="hidden"></div>
+
+    <div id="top-result" class="result-header">
+        <div id="score-text"></div>
+        <button class="btn-main" onclick="clearQuizArea()">LÀM ĐỀ KHÁC</button>
+    </div>
+
+    <div id="app-area"></div>
+    <button class="btn-green hidden" id="submit-btn" style="width:100%; font-size:24px; padding:20px; border-radius:15px; margin-top:20px" onclick="submitQuiz()">NỘP BÀI KIỂM TRA</button>
+</div>
+
+<script>
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ0PBaO37SuC5N0NbCMHlN5qY8AvvpKtYbv7pWTpjgjdPvOkBMWZLcvLCX-B0U6zdgCy0rYPIWoZB64/pub?output=csv';
+
+let App = {
+    db: [],
+    currentQs: [],
+    history: JSON.parse(localStorage.getItem('vhpt_v4_history')) || [],
+    currentType: '',
+    currentSetIdx: null
+};
+
+window.onload = async () => { await syncData(); };
+
+async function syncData() {
+    try {
+        const res = await fetch(SHEET_URL);
+        const csv = await res.text();
+        const workbook = XLSX.read(csv, {type:'string'});
+        const data = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        
+        App.db = data.map(r => {
+            const getVal = (k) => r[Object.keys(r).find(x => x.trim() === k)] || '';
+            let correctAns = "Đúng";
+            if (getVal('Sai').toString().toLowerCase() === 'x') correctAns = "Sai";
+            return { content: getVal('Nội dung'), ans: correctAns };
+        }).filter(x => x.content);
+
+        document.getElementById('sync-info').innerHTML = `✅ Đã sẵn sàng ${App.db.length} câu hỏi!`;
+        document.getElementById('main-nav').classList.remove('hidden');
+    } catch (e) {
+        document.getElementById('sync-info').innerHTML = `❌ Lỗi tải dữ liệu online!`;
+    }
+}
+
+// --- LOGIC BỘ ĐỀ ---
+function renderSets() {
+    const bar = document.getElementById('selector-bar');
+    bar.classList.remove('hidden');
+    clearQuizArea();
+    
+    let html = "<b>Bộ đề: </b>";
+    const totalSets = Math.ceil(App.db.length / 10);
+    for(let i = 1; i <= totalSets; i++) {
+        html += `<button id="btn-set-${i}" class="btn-sub" onclick="startSet(${i})">${i}</button>`;
+    }
+    bar.innerHTML = html;
+    
+    // Nếu đang làm dở bộ nào thì highlight bộ đó
+    if(App.currentSetIdx) document.getElementById(`btn-set-${App.currentSetIdx}`).classList.add('active-set');
+}
+
+function startSet(setIdx) {
+    App.currentSetIdx = setIdx;
+    App.currentType = `Bộ đề ${setIdx}`;
+    
+    // Highlight nút đang chọn
+    document.querySelectorAll('#selector-bar button').forEach(b => b.classList.remove('active-set'));
+    document.getElementById(`btn-set-${setIdx}`).classList.add('active-set');
+
+    const start = (setIdx - 1) * 10;
+    App.currentQs = App.db.slice(start, start + 10);
+    renderQuiz();
+}
+
+// --- LOGIC NGẪU NHIÊN ---
+function startRandom(count) {
+    App.currentSetIdx = null; // Reset bộ đề khi chọn ngẫu nhiên
+    document.getElementById('selector-bar').classList.add('hidden');
+    App.currentType = `Ngẫu nhiên ${count} câu`;
+    App.currentQs = [...App.db].sort(() => 0.5 - Math.random()).slice(0, count);
+    renderQuiz();
+}
+
+function renderQuiz() {
+    document.getElementById('top-result').style.display = 'none';
+    document.getElementById('submit-btn').classList.remove('hidden');
+    const area = document.getElementById('app-area');
+    area.innerHTML = App.currentQs.map((q, i) => `
+        <div class="q-block" id="wrap-${i}">
+            <p>${i+1}. ${q.content}</p>
+            <div class="tf-group">
+                <label class="option-item"><input type="radio" name="q${i}" value="Đúng"> Đúng</label>
+                <label class="option-item"><input type="radio" name="q${i}" value="Sai"> Sai</label>
+            </div>
+        </div>
+    `).join('');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function submitQuiz() {
+    let score = 0;
+    App.currentQs.forEach((q, i) => {
+        const selected = document.querySelector(`input[name="q${i}"]:checked`);
+        const wrap = document.getElementById(`wrap-${i}`);
+        if (selected && selected.value === q.ans) score++;
+        else {
+            wrap.classList.add('wrong-ans');
+            wrap.innerHTML += `<div style="color:var(--danger); font-weight:bold; margin-top:10px;">👉 ĐÁP ÁN ĐÚNG: ${q.ans.toUpperCase()}</div>`;
+        }
+    });
+
+    App.history.push({ date: new Date().toLocaleString(), type: App.currentType, score: `${score}/${App.currentQs.length}` });
+    localStorage.setItem('vhpt_v4_history', JSON.stringify(App.history));
+
+    document.getElementById('score-text').innerHTML = `<h2>KẾT QUẢ: ${score} / ${App.currentQs.length}</h2>`;
+    document.getElementById('top-result').style.display = 'block';
+    document.getElementById('submit-btn').classList.add('hidden');
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function renderHistory() {
+    document.getElementById('selector-bar').classList.add('hidden');
+    document.getElementById('submit-btn').classList.add('hidden');
+    const area = document.getElementById('app-area');
+    if (App.history.length === 0) { area.innerHTML = "<p style='text-align:center;'>Chưa có lịch sử thi.</p>"; return; }
+
+    let html = `<h3>📜 LỊCH SỬ</h3><table><tr><th>Thời gian</th><th>Loại bài</th><th>Kết quả</th></tr>`;
+    App.history.slice().reverse().forEach(h => {
+        html += `<tr><td>${h.date}</td><td>${h.type}</td><td style="color:var(--secondary); font-weight:bold;">${h.score}</td></tr>`;
+    });
+    html += `</table>`;
+    area.innerHTML = html;
+}
+
+function renderViewAll() {
+    document.getElementById('selector-bar').classList.add('hidden');
+    document.getElementById('submit-btn').classList.add('hidden');
+    document.getElementById('app-area').innerHTML = `<h2 style="text-align:center;">DANH SÁCH ĐÁP ÁN</h2>` + 
+    App.db.map((q, i) => `<div class="q-block"><p>${i+1}. ${q.content}</p><b style="color:${q.ans==='Đúng'?'green':'red'}">=> ĐÁP ÁN: ${q.ans.toUpperCase()}</b></div>`).join('');
+}
+
+function clearQuizArea() {
+    document.getElementById('top-result').style.display = 'none';
+    document.getElementById('app-area').innerHTML = '';
+}
+</script>
+</body>
+</html>
+
